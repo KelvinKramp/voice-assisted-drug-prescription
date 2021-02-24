@@ -21,7 +21,8 @@ conversation_list = [
     "Ok, do you want to change the dosing to {dosing}mg {numb_day} times per day?",
     "Ok, let's start over again",
     "Ok, I will prescribe {medication} in a dosis of {dosing}",
-    "The patient medication list now consists of  {medication_list}",
+    "The patient medication list now consists of  {medication_list} and I am going to add {new_drug} \
+    in a dosing of {dosing}mg {numb_day} times per day. Is this ok?",
     "I didn't hear you correctly, or the drug is not in my drug dictionary, please tell me again which drug you want \
     to prescribe"]
 
@@ -105,59 +106,76 @@ from fuzzywuzzy import fuzz
 
 # get standard dose function
 def get_standard_dose(voice_input):
-    string1 = voice_input  # define human voice input as string1
-    global drug_name # make drug_name a global variable because we need to use them outside the function
-    for drug_name in medication_dictionary:  # start a for loop to parse the medication dictionary
-        string2 = drug_name # define drug in dictionary as string2
-        # calculat Levenshtein distance between the drug name and the different words in the input string
+    # define human voice input as string1
+    string1 = voice_input
+    # make drug_name a global variable because we need to use them outside the function
+    global drug_name
+    # start a for loop to parse the medication dictionary
+    for drug_name in medication_dictionary:
+        # define drug in dictionary as string2
+        string2 = drug_name
+        # calculate Levenshtein distance between the drug name and the different words in the input string
         partial_ratio = fuzz.partial_ratio(string1.lower(), string2.lower())
         if partial_ratio > 80:
             print("found medication in list: ", drug_name, ", partial ratio = ", partial_ratio)
-            global numb, dose  # make numb (number of times per day and dose global variable, we need to use them outside the function
-            numb = medication_dictionary.get(string2)[0]  # define dose as dose (first value) within the dictionary key (drug)
-            dose = medication_dictionary.get(string2)[1]  # define dose as dose (second value) within the dictionary key (drug)
-            text_speech(conversation_list[1].format(medication=drug_name, numb_day=numb, dosing=dose))  # speak!
-            if string2 == "Augmentin":
+            # make numb (number of times per day and dose global variable, we need to use them outside the function
+            global numb, dose
+            # define numb as first item of list in the value of dictionary key (drug)
+            numb = medication_dictionary.get(string2)[0]
+            # define numb as second item of list in the value of dictionary key (drug)
+            dose = medication_dictionary.get(string2)[1]
+            if string2.lower() == "augmentin":
                 numb = adjust_dose_augm(numb)
-                text_speech(
-                    conversation_list[2].format(medication=drug_name, numb_day=numb, dosing=dose, GFR=GFR,
-                                                weight=weight))  # speak!
+                text_speech(conversation_list[2].format(medication=drug_name, numb_day=numb, dosing=dose, GFR=GFR,
+                                                        weight=weight))  # speak!
                 return
             else:
                 text_speech(conversation_list[1].format(medication=drug_name, numb_day=numb, dosing=dose))  # speak!
                 return
-    text_speech(conversation_list[-1]) # let voice assistant say there was an error
-    voice_input = speech_text() # let user give new input
-    get_standard_dose(voice_input) # go into loop (start function again) in the case of no match
+    # let voice assistant say there was an error if drug was not found
+    text_speech(conversation_list[-1])
+    # let user give new input in case of error
+    voice_input = speech_text()
+    # go into loop (start function again) in the case of no match
+    get_standard_dose(voice_input)
 
 
 import os
 import sys
 
 def decision(voice_input):
-    if str.lower(voice_input) == "yes": # approval
+    # approval
+    if str.lower(voice_input) == "yes":
         return
-    if str.lower(voice_input) == "no": # change
+    # change
+    if str.lower(voice_input) == "no":
         text_speech(conversation_list[3])
         voice_input = speech_text()
-        if "change" in str.lower(voice_input): # confirm change
+        # confirm change
+        if "change" in str.lower(voice_input):
             text_speech(conversation_list[4])
+            # input number of mg
             global dose
             dose = speech_text()
             print(dose)
             text_speech(conversation_list[5])
+            # input times per day
             global numb
             numb = speech_text()
             print(numb)
-            text_speech(conversation_list[6].format(dosing = dose, numb_day=numb))
+            # closed loop communication
+            text_speech(conversation_list[6].format(dosing=dose, numb_day=numb))
             voice_input = speech_text()
-            if str.lower(voice_input) == "yes": # new dosing correct
+            # if new dosing correct continue
+            if str.lower(voice_input) == "yes":
                 return
-            if str.lower(voice_input) == "no": # new dosing incorrect
-                decision(voice_input) # loop again to change in the workflow if the new dose is incorrect
-    if str.lower(voice_input) == "cancel": # cancel prescription and restart script
+            # new dosing incorrect restart function
+            if str.lower(voice_input) == "no":
+                decision(voice_input)
+    # cancel
+    if str.lower(voice_input) == "cancel":
+        #  restart script
         os.execv(sys.executable, ['python'] + sys.argv)
-
 
 text_speech(conversation_list[0])
 voice_input = speech_text()
@@ -179,9 +197,20 @@ for li in soup.findAll('li'):
 
 import time
 
+# check if drug in medication list
 if drug_name in download_medication_list:
     text_speech("The drug is already in the medication list.")
 else:
+    # closed loop communication
+    text_speech(conversation_list[9].format(medication_list=download_medication_list, new_drug=drug_name,
+                                            numb_day=numb, dosing=dose))
+    voice_input = speech_text()
+    if "yes" in voice_input.lower():
+        pass
+    else:
+        text_speech(conversation_list[7])
+        os.execv(sys.executable, ['python'] + sys.argv)
+    # prescribe new medication
     time.sleep(1)
     input_field = driver.find_element_by_xpath("/html/body/input[1]")
     input_field.send_keys(drug_name + " " + str(dose) + "mg " + str(numb) + " times per day") # fill in info in inputfield
@@ -199,5 +228,9 @@ adjusted_medication_list = []
 for li in soup.findAll('li'):
     adjusted_medication_list.append(li.getText())
 
-# speak adjusted medication list outloud
-text_speech(conversation_list[9].format(medication_list = str(adjusted_medication_list)))
+# print list
+for item in adjusted_medication_list:
+    print(item)
+
+# close browser
+driver.close()
