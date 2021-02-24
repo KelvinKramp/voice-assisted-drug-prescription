@@ -32,6 +32,7 @@ def text_speech(text_line):
     engine.say(text_line)  # prime the say function with the variable text_line
     engine.runAndWait()  # run the tts function, without calling this function the voice assistant doesnt start talking
 
+    
 def speech_text():
     r = sr.Recognizer()
     # start capturing audio from microphone
